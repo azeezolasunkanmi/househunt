@@ -39,12 +39,15 @@ export async function login() {
   try {
     const redirectUri = Linking.createURL("/");
 
+    //asks Appwrite to create a temporary OAuth2 login URL for Google.
+    //response will be the URL you need to open in a browser or web view to start login.
     const response = await account.createOAuth2Token(
       OAuthProvider.Google,
       redirectUri,
     );
     if (!response) throw new Error("Create OAuth2 token failed");
 
+    //opens the OAuth URL in a browser and waits for the user to complete the login.
     const browserResult = await openAuthSessionAsync(
       response.toString(),
       redirectUri,
@@ -52,11 +55,13 @@ export async function login() {
     if (browserResult.type !== "success")
       throw new Error("Create OAuth2 token failed");
 
+    //extracts the secret and userId from the redirect URL.
     const url = new URL(browserResult.url);
     const secret = url.searchParams.get("secret")?.toString();
     const userId = url.searchParams.get("userId")?.toString();
     if (!secret || !userId) throw new Error("Create OAuth2 token failed");
 
+    //creates a session with the extracted secret and userId.
     const session = await account.createSession(userId, secret);
     if (!session) throw new Error("Failed to create session");
 
@@ -77,19 +82,32 @@ export async function logout() {
   }
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return `data:image/png;base64,${btoa(binary)}`;
+}
+
 export async function getCurrentUser() {
   try {
     const result = await account.get();
     if (result.$id) {
-      const userAvatar = avatar.getInitials({
+      const avatarBuffer = await avatar.getInitials({
         name: result.name || result.email,
         width: 100,
         height: 100,
+        background: "000000",
       });
+
+      const userAvatar = arrayBufferToBase64(avatarBuffer);
 
       return {
         ...result,
-        avatar: userAvatar.toString(),
+        avatar: userAvatar, // ✅ base64 string for React Native
       };
     }
 
